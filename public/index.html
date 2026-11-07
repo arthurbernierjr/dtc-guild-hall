@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guild hall</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; background: #101410; color: #f4f1e8; }
+    main { max-width: 40rem; margin: 0 auto; padding: 1.5rem; }
+    label { display: block; margin: 0.6rem 0; }
+    input, button { font: inherit; min-height: 44px; }
+    a { color: #3ddc84; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Guild hall</h1>
+    <p>Example for Deeper Than Code, Unit 4. Register two accounts, send a message, and the inbox only shows mail addressed to the signed-in user.</p>
+    <form id="register">
+      <h2>Register</h2>
+      <label>Name <input name="name" required></label>
+      <label>Email <input name="email" type="email" required></label>
+      <label>Password <input name="password" type="password" minlength="8" required></label>
+      <button type="submit">Create account</button>
+    </form>
+    <form id="login">
+      <h2>Login</h2>
+      <label>Email <input name="email" type="email" required></label>
+      <label>Password <input name="password" type="password" required></label>
+      <button type="submit">Enter</button>
+    </form>
+    <section id="hall" hidden>
+      <p id="who"></p>
+      <h2>Inbox</h2>
+      <ul id="inbox"></ul>
+      <form id="send">
+        <label>To user id <input name="to" required></label>
+        <label>Note <input name="body" required></label>
+        <button type="submit">Send</button>
+      </form>
+      <p id="error" role="status"></p>
+    </section>
+  </main>
+  <script>
+    let token = "";
+    const hall = document.querySelector("#hall");
+    const error = document.querySelector("#error");
+    async function api(path, options) {
+      const response = await fetch(path, {
+        ...options,
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { authorization: "Bearer " + token } : {}),
+          ...(options && options.headers),
+        },
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || response.statusText);
+      return body;
+    }
+    document.querySelector("#register").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.target));
+      try {
+        const result = await api("/api/register", { method: "POST", body: JSON.stringify(data) });
+        token = result.token;
+        show(result.user);
+      } catch (err) { error.textContent = err.message; }
+    });
+    document.querySelector("#login").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.target));
+      try {
+        const result = await api("/api/login", { method: "POST", body: JSON.stringify(data) });
+        token = result.token;
+        show(result.user);
+      } catch (err) { error.textContent = err.message; }
+    });
+    async function show(user) {
+      hall.hidden = false;
+      document.querySelector("#who").textContent = user.name + " · id " + user.id;
+      const notes = await api("/api/inbox");
+      document.querySelector("#inbox").replaceChildren(...notes.map((note) => {
+        const item = document.createElement("li");
+        item.textContent = (note.from && note.from.name ? note.from.name : "someone") + ": " + note.body;
+        return item;
+      }));
+    }
+    document.querySelector("#send").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.target));
+      try {
+        await api("/api/messages", { method: "POST", body: JSON.stringify(data) });
+        error.textContent = "Sent.";
+        event.target.reset();
+      } catch (err) { error.textContent = err.message; }
+    });
+  </script>
+</body>
+</html>
