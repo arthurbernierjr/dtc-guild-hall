@@ -4,41 +4,38 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Guild hall</title>
-  <style>
-    body { font-family: sans-serif; margin: 0; background: #101410; color: #f4f1e8; }
-    main { max-width: 40rem; margin: 0 auto; padding: 1.5rem; }
-    label { display: block; margin: 0.6rem 0; }
-    input, button { font: inherit; min-height: 44px; }
-    a { color: #3ddc84; }
-  </style>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main>
+  <main class="hall-page">
+    <p class="eyebrow">Unit 4 · example</p>
     <h1>Guild hall</h1>
-    <p>Example for Deeper Than Code, Unit 4. Register two accounts, send a message, and the inbox only shows mail addressed to the signed-in user.</p>
-    <form id="register">
-      <h2>Register</h2>
-      <label>Name <input name="name" required></label>
-      <label>Email <input name="email" type="email" required></label>
-      <label>Password <input name="password" type="password" minlength="8" required></label>
-      <button type="submit">Create account</button>
-    </form>
-    <form id="login">
-      <h2>Login</h2>
-      <label>Email <input name="email" type="email" required></label>
-      <label>Password <input name="password" type="password" required></label>
-      <button type="submit">Enter</button>
-    </form>
-    <section id="hall" hidden>
-      <p id="who"></p>
+    <p class="lede">Register two accounts, send a note, and the inbox only shows mail addressed to the signed-in user.</p>
+    <div class="gates">
+      <form id="register" class="panel">
+        <h2>Register</h2>
+        <label><span>Name</span><input name="name" required></label>
+        <label><span>Email</span><input name="email" type="email" required autocomplete="username"></label>
+        <label><span>Password</span><input name="password" type="password" minlength="8" required autocomplete="new-password"></label>
+        <button type="submit">Create account</button>
+      </form>
+      <form id="login" class="panel">
+        <h2>Login</h2>
+        <label><span>Email</span><input name="email" type="email" required autocomplete="username"></label>
+        <label><span>Password</span><input name="password" type="password" required autocomplete="current-password"></label>
+        <button type="submit">Enter</button>
+      </form>
+    </div>
+    <p id="error" class="status" role="status"></p>
+    <section id="hall" class="desk" hidden>
+      <p id="who" class="who"></p>
       <h2>Inbox</h2>
-      <ul id="inbox"></ul>
-      <form id="send">
-        <label>To user id <input name="to" required></label>
-        <label>Note <input name="body" required></label>
+      <ul id="inbox" class="inbox"></ul>
+      <form id="send" class="send">
+        <label><span>To user id</span><input name="to" required></label>
+        <label><span>Note</span><input name="body" required></label>
         <button type="submit">Send</button>
       </form>
-      <p id="error" role="status"></p>
     </section>
   </main>
   <script>
@@ -64,6 +61,7 @@
       try {
         const result = await api("/api/register", { method: "POST", body: JSON.stringify(data) });
         token = result.token;
+        error.textContent = "";
         show(result.user);
       } catch (err) { error.textContent = err.message; }
     });
@@ -73,16 +71,29 @@
       try {
         const result = await api("/api/login", { method: "POST", body: JSON.stringify(data) });
         token = result.token;
+        error.textContent = "";
         show(result.user);
       } catch (err) { error.textContent = err.message; }
     });
     async function show(user) {
       hall.hidden = false;
-      document.querySelector("#who").textContent = user.name + " · id " + user.id;
+      const who = document.querySelector("#who");
+      who.replaceChildren();
+      const name = document.createElement("strong");
+      name.textContent = user.name;
+      const id = document.createElement("code");
+      id.textContent = user.id;
+      who.append(name, id);
       const notes = await api("/api/inbox");
       document.querySelector("#inbox").replaceChildren(...notes.map((note) => {
         const item = document.createElement("li");
-        item.textContent = (note.from && note.from.name ? note.from.name : "someone") + ": " + note.body;
+        item.className = "inbox__item";
+        const from = document.createElement("span");
+        from.className = "inbox__from";
+        from.textContent = note.from && note.from.name ? note.from.name : "someone";
+        const body = document.createElement("span");
+        body.textContent = note.body;
+        item.append(from, body);
         return item;
       }));
     }
