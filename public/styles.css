@@ -112,7 +112,18 @@ input {
   font: 400 16px/1 var(--font-body);
 }
 
-input:focus { border-color: var(--green); outline: none; }
+select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  background: var(--code);
+  color: var(--heading);
+  font: 400 16px/1 var(--font-body);
+}
+
+input:focus, select:focus { border-color: var(--green); outline: none; }
 
 button {
   min-height: 48px;
@@ -184,13 +195,29 @@ button:hover { translate: -2px -2px; box-shadow: 4px 4px 0 #000; }
   color: var(--yellow);
 }
 
-.send { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 10px; align-items: end; }
+.send { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 10px; align-items: end; margin-bottom: 18px; }
 .send label { margin: 0; }
+.send--pack { grid-template-columns: 1.4fr 1fr auto; margin: 14px 0 0; }
+
+.rooms { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; }
+
+.inbox__item--pack { grid-template-columns: auto 1fr auto auto; align-items: center; column-gap: 12px; }
+.qty { font-family: var(--font-mono); font-size: 14px; color: var(--green-light); }
+
+button.ghost {
+  min-height: 36px;
+  padding: 0 14px;
+  background: transparent;
+  border-color: var(--border-2);
+  color: var(--soft);
+  font-size: 13px;
+}
+button.ghost:hover { border-color: var(--green); color: var(--heading); }
 
 :focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
 
 @media (max-width: 760px) {
-  .gates, .send { grid-template-columns: 1fr; }
+  .gates, .send, .rooms, .inbox__item--pack { grid-template-columns: 1fr; }
 }
 
 .marquee { overflow: hidden; border-top: 1px solid var(--border); margin-top: 28px; }

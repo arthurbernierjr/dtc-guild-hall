@@ -10,7 +10,7 @@
   <main class="hall-page">
     <p class="eyebrow">Unit 4 · example</p>
     <h1>Guild hall</h1>
-    <p class="lede">Register two accounts, send a note, and the inbox only shows mail addressed to the signed-in user.</p>
+    <p class="lede">Register two accounts, send a letter, and the inbox only shows mail addressed to the signed-in user. The pack counts what you carry; the catalog never does.</p>
     <div class="gates">
       <form id="register" class="panel">
         <h2>Register</h2>
@@ -29,20 +29,48 @@
     <p id="error" class="status" role="status"></p>
     <section id="hall" class="desk" hidden>
       <p id="who" class="who"></p>
-      <h2>Inbox</h2>
-      <ul id="inbox" class="inbox"></ul>
       <form id="send" class="send">
-        <label><span>To user id</span><input name="to" required></label>
-        <label><span>Note</span><input name="body" required></label>
+        <label><span>To user id</span><input name="recipient" required placeholder="paste the other account's id"></label>
+        <label><span>Letter</span><input name="body" required maxlength="2000"></label>
         <button type="submit">Send</button>
       </form>
+      <div class="rooms">
+        <div>
+          <h2>Inbox</h2>
+          <ul id="inbox" class="inbox"></ul>
+        </div>
+        <div>
+          <h2>Outbox</h2>
+          <ul id="outbox" class="inbox"></ul>
+        </div>
+      </div>
+      <div class="rooms">
+        <div>
+          <h2>Catalog</h2>
+          <ul id="items" class="inbox"></ul>
+          <form id="give" class="send send--pack">
+            <label><span>Item</span><select name="item" id="give-item" required></select></label>
+            <label><span>Amount</span><input name="amount" type="number" min="1" step="1" value="1" required></label>
+            <button type="submit">Give me</button>
+          </form>
+        </div>
+        <div>
+          <h2>Pack</h2>
+          <ul id="pack" class="inbox"></ul>
+        </div>
+      </div>
+      <p><button type="button" id="logout" class="ghost">Leave the hall</button></p>
     </section>
     <div class="marquee" aria-hidden="true"><b><span>Register</span><span>Inbox</span><span>Inventory</span><span>Register</span><span>Inbox</span><span>Inventory</span></b></div>
   </main>
   <script>
+    // The token lives in sessionStorage and in the Authorization header. It is never in a URL.
     let token = "";
+    try { token = sessionStorage.getItem("hallToken") || ""; } catch (err) { token = ""; }
+    let me = null;
     const hall = document.querySelector("#hall");
     const error = document.querySelector("#error");
+
     async function api(path, options) {
       const response = await fetch(path, {
         ...options,
@@ -56,48 +84,125 @@
       if (!response.ok) throw new Error(body.error || response.statusText);
       return body;
     }
+
+    function keep(result) {
+      token = result.token;
+      me = { id: result.id, name: result.name, email: result.email };
+      try {
+        sessionStorage.setItem("hallToken", token);
+        sessionStorage.setItem("hallUser", JSON.stringify(me));
+      } catch (err) { /* private window */ }
+      error.textContent = "";
+      show();
+    }
+
+    function leave() {
+      token = "";
+      me = null;
+      try {
+        sessionStorage.removeItem("hallToken");
+        sessionStorage.removeItem("hallUser");
+      } catch (err) { /* private window */ }
+      hall.hidden = true;
+      error.textContent = "";
+    }
+
+    function row(parts) {
+      const item = document.createElement("li");
+      item.className = "inbox__item";
+      item.append(...parts);
+      return item;
+    }
+
+    function tag(text) {
+      const span = document.createElement("span");
+      span.className = "inbox__from";
+      span.textContent = text;
+      return span;
+    }
+
+    function text(value) {
+      const span = document.createElement("span");
+      span.textContent = value;
+      return span;
+    }
+
+    // Register answers with the account. Login answers with the token. Registering here does both.
+    async function login(data) {
+      keep(await api("/api/login", { method: "POST", body: JSON.stringify({ email: data.email, password: data.password }) }));
+    }
     document.querySelector("#register").addEventListener("submit", async (event) => {
       event.preventDefault();
       const data = Object.fromEntries(new FormData(event.target));
       try {
-        const result = await api("/api/register", { method: "POST", body: JSON.stringify(data) });
-        token = result.token;
-        error.textContent = "";
-        show(result.user);
+        await api("/api/register", { method: "POST", body: JSON.stringify(data) });
+        await login(data);
       } catch (err) { error.textContent = err.message; }
     });
     document.querySelector("#login").addEventListener("submit", async (event) => {
       event.preventDefault();
-      const data = Object.fromEntries(new FormData(event.target));
       try {
-        const result = await api("/api/login", { method: "POST", body: JSON.stringify(data) });
-        token = result.token;
-        error.textContent = "";
-        show(result.user);
+        await login(Object.fromEntries(new FormData(event.target)));
       } catch (err) { error.textContent = err.message; }
     });
-    async function show(user) {
+
+    async function loadLetters() {
+      const [inbox, outbox] = await Promise.all([api("/api/inbox"), api("/api/outbox")]);
+      document.querySelector("#inbox").replaceChildren(...inbox.map((note) =>
+        row([tag("from " + (note.sender && note.sender.name ? note.sender.name : "someone")), text(note.body)])
+      ));
+      document.querySelector("#outbox").replaceChildren(...outbox.map((note) =>
+        row([tag("to " + (note.recipient && note.recipient.name ? note.recipient.name : "someone")), text(note.body)])
+      ));
+    }
+
+    async function loadCatalog() {
+      const items = await api("/api/items");
+      document.querySelector("#items").replaceChildren(...items.map((item) => row([tag(item.kind), text(item.name)])));
+      document.querySelector("#give-item").replaceChildren(...items.map((item) => {
+        const option = document.createElement("option");
+        option.value = item._id;
+        option.textContent = item.name;
+        return option;
+      }));
+    }
+
+    // The number on screen is holding.qty from the server's body, never a local subtraction.
+    async function loadPack() {
+      const holdings = await api("/api/pack");
+      document.querySelector("#pack").replaceChildren(...holdings.map((holding) => {
+        const count = document.createElement("strong");
+        count.className = "qty";
+        count.textContent = "× " + holding.qty;
+        const spend = document.createElement("button");
+        spend.type = "button";
+        spend.className = "ghost";
+        spend.textContent = "Spend one";
+        spend.addEventListener("click", async () => {
+          try {
+            await api("/api/pack/spend", { method: "POST", body: JSON.stringify({ item: holding.item._id, amount: 1 }) });
+            error.textContent = "";
+            await loadPack();
+          } catch (err) { error.textContent = err.message; }
+        });
+        const line = row([tag(holding.item.kind), text(holding.item.name), count, spend]);
+        line.classList.add("inbox__item--pack");
+        return line;
+      }));
+    }
+
+    async function show() {
       hall.hidden = false;
       const who = document.querySelector("#who");
       who.replaceChildren();
       const name = document.createElement("strong");
-      name.textContent = user.name;
+      name.textContent = me.name;
       const id = document.createElement("code");
-      id.textContent = user.id;
+      id.textContent = me.id;
       who.append(name, id);
-      const notes = await api("/api/inbox");
-      document.querySelector("#inbox").replaceChildren(...notes.map((note) => {
-        const item = document.createElement("li");
-        item.className = "inbox__item";
-        const from = document.createElement("span");
-        from.className = "inbox__from";
-        from.textContent = note.from && note.from.name ? note.from.name : "someone";
-        const body = document.createElement("span");
-        body.textContent = note.body;
-        item.append(from, body);
-        return item;
-      }));
+      await Promise.all([loadLetters(), loadCatalog(), loadPack()]);
     }
+
     document.querySelector("#send").addEventListener("submit", async (event) => {
       event.preventDefault();
       const data = Object.fromEntries(new FormData(event.target));
@@ -105,8 +210,28 @@
         await api("/api/messages", { method: "POST", body: JSON.stringify(data) });
         error.textContent = "Sent.";
         event.target.reset();
+        await loadLetters();
       } catch (err) { error.textContent = err.message; }
     });
+
+    document.querySelector("#give").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.target));
+      try {
+        await api("/api/pack/give", { method: "POST", body: JSON.stringify({ item: data.item, amount: Number(data.amount) }) });
+        error.textContent = "";
+        await loadPack();
+      } catch (err) { error.textContent = err.message; }
+    });
+
+    document.querySelector("#logout").addEventListener("click", leave);
+
+    // A token kept from this tab's last visit reopens the hall. An expired one is cleared.
+    if (token) {
+      try { me = JSON.parse(sessionStorage.getItem("hallUser")); } catch (err) { me = null; }
+      if (me) show().catch(() => leave());
+      else leave();
+    }
   </script>
 </body>
 </html>
